@@ -1,18 +1,45 @@
+import pygame
 import random
 import time
+
+# Задание цветов
+white = (255, 255, 255)
+black = (0, 0, 0)
+green = (0, 255, 0)
+red = (255, 0, 0)
+orange = (255, 165, 0)
+blue = (0, 0, 255)
 
 references = {}
 
 
-
+# Отобразить все цвета
+def PrintAllCells():
+    for row in range(len(field)):
+        for column in range(len(field[row])):
+            # Если на данной клетке кто то стоял
+            if (column, row) in references:
+                # И если этот список не пуст
+                if len(references[(column, row)]) > 0:
+                    # Закрашивание клетки цветом последнего сутпившего
+                    field[row][column].color = references[(column, row)][-1].color
+                # Иначе закрашивание белым
+                else:
+                    field[row][column].color = white
+            else:
+                field[row][column].color = white
+            field[row][column].PrintCell()
 
 
 def AddRow():
-    field[1]+=1
+    field.append([0] * 100)
+    for x in range(100):
+        field[-1][x] = Cell(x, len(field) - 1, white)
 
 
 def AddColumn():
-    field[0]+=1
+    for x in range(len(field)):
+        field[x].append(Cell(len(field[x]), x, white))
 
 
 # Функции создания организмов
@@ -79,7 +106,6 @@ def MoveAnimals():
                 survived = Survive(references[(x, y)])
                 for creature in references[(x, y)]:
                     if creature not in survived:
-                        creature.isAlive = False
                         references[(x, y)].remove(creature)
                         KillCreature(creature)
         else:
@@ -104,16 +130,15 @@ def KillCreature(creature):
 
 def BornCreature(creature):
     creature.age = 0
+    creature.mass = 0
     creature.maxAge = random.randint(25, 45)
     if isinstance(creature, Predator):
         creature.hunger = 0
         creature.gender = random.choice(['m', 'f'])
-        creature.mass = 1
         creature.agression = random.randint(1,20)
         predators.append(creature)
         animals.append(creature)
     elif isinstance(creature, GrassFeeding):
-        creature.mass = 1
         creature.hunger = 0
         creature.gender = random.choice(['m', 'f'])
         grassFeedings.append(creature)
@@ -121,7 +146,6 @@ def BornCreature(creature):
     elif isinstance(creature, Omnivore):
         creature.hunger = 0
         creature.gender = random.choice(['m', 'f'])
-        creature.mass = 1
         creature.agression = random.randint(1, 20)
         omnivores.append(creature)
         animals.append(creature)
@@ -144,7 +168,6 @@ def OldAge():
                 creature.hunger += 2
                 creature.hunger = min(creature.hunger, 20)
             if creature.age >= creature.maxAge:
-                creature.isAlive = False
                 KillCreature(creature)
                 references[cell].remove(creature)
 
@@ -245,9 +268,7 @@ def Survive(list):
                 if plant.name() == "GoodPlant":
                     # удалось съесть питательное растение
                     omni.hunger -= plant.age
-                    plant.isAlive = False
                     plants.remove(plant)
-
                     omni.hunger = max(omni.hunger, 0)
                     if omni.hunger < 5:
                         agressiveOmnivores.remove(omni)
@@ -256,7 +277,6 @@ def Survive(list):
                     if random.randint(1, 2) == 2:
                         # Всядное погибло
                         creaturesOnCell['Omnivore'].remove(omni)
-                        plant.isAlive = False
                         plants.remove(plant)
 
             else:
@@ -314,7 +334,6 @@ def Survive(list):
                 if plant.name() == "GoodPlant":
                     grass.hunger -= plant.age
                     grass.hunger = max(grass.hunger, 0)
-                    plant.isAlive = False
                     plants.remove(plant)
                     if grass.hunger < 5:
                         hungerGrassFeeding.remove(grass)
@@ -322,7 +341,6 @@ def Survive(list):
                     if random.choice(1, 2) == 2:
                         # Съедено ядовитое растение
                         creaturesOnCell['GrassFeeding'].remove(grass)
-                        plant.isAlive = False
                         plants.remove(plant)
             else:
                 break
@@ -335,6 +353,7 @@ def Survive(list):
 
 
 def Multiply():
+    newBornes = []
     for cell in references.keys():
         adultAnimals = {
             ('Predator', 'm'): [],
@@ -345,7 +364,6 @@ def Multiply():
             ('Omnivore', 'f'): [],
         }
         plants = []
-        newBornes = []
         for creature in references[cell]:
             if creature.name() != 'GoodPlant' and creature.name() != 'BadPlant':
                 # Добавление животного в список размножающихся
@@ -362,64 +380,85 @@ def Multiply():
                 animal2 = random.choice(adultAnimals[name, 'f'])
                 x = animal1.location[0]
                 y = animal1.location[1]
-                newBornLocation = random.choice([
+                # выбор локации для рождения
+                newBornLocation = [
                     (x + 1, y),
                     (x, y + 1),
                     (x - 1, y),
                     (x, y - 1),
                     (x + 1, y + 1),
                     (x - 1, y - 1),
-                ])
-                if isinstance(animal1, Predator):
-                    creature = Predator(
-                        newBornLocation[0],
-                        newBornLocation[1]
-                    )
-                    BornCreature(creature)
-                    newBornes.append(creature)
-                elif isinstance(animal1, GrassFeeding):
-                    creature = GrassFeeding(
-                        newBornLocation[0],
-                        newBornLocation[1]
-                    )
-                    BornCreature(creature)
-                    newBornes.append(creature)
-                elif isinstance(animal1, Omnivore):
-                    creature = Omnivore(
-                        newBornLocation[0],
-                        newBornLocation[1]
-                    )
-                    BornCreature(creature)
-                    newBornes.append(creature)
-                adultAnimals[name, 'm'].remove(animal1)
-                adultAnimals[name, 'f'].remove(animal2)
+                ]
+                # Если на клетке кто то стоит
+                # то она не подходит для рождения
+                badLocactions = []
+                for loc in newBornLocation:
+                    if loc in references:
+                        if len(references[loc]) > 0:
+                            badLocactions.append(loc)
+                for x in badLocactions:
+                    newBornLocation.remove(x)
+                if len(newBornLocation) > 0:
+                    newBornLocation = random.choice(newBornLocation)
+                    if isinstance(animal1, Predator):
+                        creature = Predator(
+                            newBornLocation[0],
+                            newBornLocation[1]
+                        )
+                        BornCreature(creature)
+                        newBornes.append(creature)
+                    elif isinstance(animal1, GrassFeeding):
+                        creature = GrassFeeding(
+                            newBornLocation[0],
+                            newBornLocation[1]
+                        )
+                        BornCreature(creature)
+                        newBornes.append(creature)
+                    elif isinstance(animal1, Omnivore):
+                        creature = Omnivore(
+                            newBornLocation[0],
+                            newBornLocation[1]
+                        )
+                        BornCreature(creature)
+                        newBornes.append(creature)
+                    adultAnimals[name, 'm'].remove(animal1)
+                    adultAnimals[name, 'f'].remove(animal2)
         for plant in plants:
             if random.randint(1, 10) == 10:
                 plant.age -= 1
                 x = plant.location[0]
                 y = plant.location[1]
-                newBornLocation = random.choice([
-                    (x+1, y),
-                    (x, y+1),
-                    (x-1, y),
-                    (x, y-1),
-                    (x+1, y+1),
-                    (x-1, y-1),
-                ])
-                if plant.name() == 'GoodPlant':
-                    creature = GoodPlant(
-                        newBornLocation[0],
-                        newBornLocation[1]
-                    )
-                    BornCreature(creature)
-                    newBornes.append(creature)
-                elif plant.name() == 'BadPlant':
-                    creature = BadPlant(
-                        newBornLocation[0],
-                        newBornLocation[1]
-                    )
-                    BornCreature(creature)
-                    newBornes.append(creature)
+                newBornLocation = [
+                    (x + 1, y),
+                    (x, y + 1),
+                    (x - 1, y),
+                    (x, y - 1),
+                    (x + 1, y + 1),
+                    (x - 1, y - 1),
+                ]
+                badLocactions = []
+                for loc in newBornLocation:
+                    if loc in references:
+                        if len(references[loc]) > 0:
+                            badLocactions.append(loc)
+                for x in badLocactions:
+                    newBornLocation.remove(x)
+                if len(newBornLocation) > 0:
+                    newBornLocation = random.choice(newBornLocation)
+                    if plant.name() == 'GoodPlant':
+                        creature = GoodPlant(
+                            newBornLocation[0],
+                            newBornLocation[1]
+                        )
+                        BornCreature(creature)
+                        newBornes.append(creature)
+                    elif plant.name() == 'BadPlant':
+                        creature = BadPlant(
+                            newBornLocation[0],
+                            newBornLocation[1]
+                        )
+                        BornCreature(creature)
+                        newBornes.append(creature)
     for creature in newBornes:
         if (creature.location[0], creature.location[1]) in references:
             references[(creature.location[0], creature.location[1])].append(creature)
@@ -429,7 +468,6 @@ def Multiply():
 
 # Родительский класс для животных
 class Animal:
-    isAlive = True
     def __init__(self, x, y):
         self.location = [x, y]
 
@@ -475,17 +513,18 @@ class Animal:
                     self.location[0] -= 1
                     self.location[1] += 1
             if self.location[1] < 0:
-                self.location[1] = field[1] - 1
+                self.location[1] = len(field) - 1
             if self.location[0] < 0:
-                self.location[0] = field[0] - 1
-            while self.location[1] >= field[1]:
+                self.location[0] = len(field[self.location[1]]) - 1
+            while self.location[1] >= len(field):
                 AddRow()
-            while self.location[0] >= field[0]:
+            while self.location[0] >= len(field[self.location[1]]):
                 AddColumn()
 
 
 # Классы организмов
 class Predator(Animal):
+    color = red
 
     def GetPower(self):
         return self.hunger + self.mass + self.agression
@@ -495,12 +534,14 @@ class Predator(Animal):
 
 
 class GrassFeeding(Animal):
+    color = orange
 
     def name(self):
         return "GrassFeeding"
 
 
 class Omnivore(Animal):
+    color = blue
 
     def GetPower(self):
         return self.hunger + self.mass + self.agression
@@ -510,7 +551,7 @@ class Omnivore(Animal):
 
 
 class GoodPlant:
-    isAlive = True
+    color = green
     age = None
     mass = age
     maxAge = None
@@ -523,7 +564,7 @@ class GoodPlant:
 
 
 class BadPlant:
-    isAlive = True
+    color = black
     age = None
     mass = age
     maxAge = None
@@ -535,9 +576,40 @@ class BadPlant:
         return "BadPlant"
 
 
+# Класс одной клетки
+class Cell:
+    def __init__(self, x, y, color):
+        self.x = x
+        self.y = y
+        self.color = color
 
-field = [100, 100]
+    # Закрашивание одной клетки
+    def PrintCell(self):
+        row = self.y
+        column = self.x
+        color = self.color
+        pygame.draw.rect(screen, color, [(cell_size + 1) * column + 1, (cell_size + 1) * row + 1, cell_size, cell_size])
 
+
+# Инициализация Pygame
+pygame.init()
+
+# Создание экрана
+# Размеры экрана берутся с учетом линий между клетками
+screen_width = 700
+screen_height = 700
+screen = pygame.display.set_mode((screen_width, screen_height))
+
+# Создание поля из 100 на 100 клеток
+cell_size = 6
+field = [[0 for x in range(100)] for y in range(100)]
+
+# Отрисовка поля
+for row in range(100):
+    color = white
+    for column in range(100):
+        field[column][row] = Cell(column, row, color)
+        pygame.draw.rect(screen, color, [(cell_size + 1) * column + 1, (cell_size + 1) * row + 1, cell_size, cell_size])
 
 # Списки для организмов
 predators = []
@@ -551,25 +623,32 @@ for x in range(1000):
     CreatePredator()
     CreateGrassFeeding()
     CreateOmnivore()
+
+for x in range(10):
     CreateGoodPlant()
     CreateBadPlant()
 
 # Список всех животных
 animals = predators + grassFeedings + omnivores
-clear = "\n" * 100
+
 while True:
+    # Отображение всех клеток
+    PrintAllCells()
+    # Обновление экрана
+    pygame.display.flip()
     # Остановка на единицу времени (0.3 сек)
-    print(clear)
-    print("Predators: ", len(predators))
-    print("Grass feedings: ", len(grassFeedings))
-    print("Omnivores: ", len(omnivores))
-    print("Good plants: ", len(goodPlants))
-    print("Bad plants: ", len(badPlants))
-    print("Animals: ", len(animals))
-    if len(animals)==0:
-        print('f')
-    #time.sleep(0.3)
+    k = 0
+    for x in references.values():
+        k+=len(x)
+    if k == 0:
+        pygame.quit()
+        quit()
     MoveAnimals()
     OldAge()
     Multiply()
-
+    # обработка событий
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            # выход из игры при нажатии на крестик
+            pygame.quit()
+            quit()
